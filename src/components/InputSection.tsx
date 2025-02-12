@@ -36,9 +36,12 @@ const InputSection = ({
     if (items) {
       for (let i = 0; i < items.length; i++) {
         if (items[i].kind === "file") {
-          const file = items[i].getAsFile();
-          if (file) {
-            onLocalPathSelect(file.path);
+          const entry = items[i].webkitGetAsEntry();
+          if (entry && entry.isDirectory) {
+            const dirPath = entry.fullPath;
+            console.log("Dropped directory:", dirPath);
+            onLocalPathSelect(dirPath);
+            break;
           }
         }
       }
@@ -69,8 +72,16 @@ const InputSection = ({
               className="hidden"
               webkitdirectory="true"
               onChange={(e) => {
-                if (e.target.files?.[0]) {
-                  onLocalPathSelect(e.target.files[0].path);
+                const files = e.target.files;
+                if (files && files.length > 0) {
+                  // Get the directory path from the first file
+                  const filePath = files[0].path;
+                  const dirPath = filePath.substring(
+                    0,
+                    filePath.lastIndexOf("/"),
+                  );
+                  console.log("Selected directory:", dirPath);
+                  onLocalPathSelect(dirPath);
                 }
               }}
             />
