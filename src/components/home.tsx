@@ -31,13 +31,27 @@ const Home = () => {
     },
   ]);
 
+  const [fileTree, setFileTree] = React.useState<any[]>([]);
+
   const handleLocalPathSelect = async (path: string) => {
     try {
       setIsProcessing(true);
-      const file = new File([""], path);
-      const result = await analyzeCode(file);
-      setCodeContext(result.content);
-      // Successfully processed the file
+      const result = await analyzeCode(path);
+      setFileTree(result.file_tree);
+      setCodeContext(result.code_content);
+
+      // Add initial analysis as a message
+      if (result.summary) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now().toString(),
+            role: "assistant",
+            content: result.summary,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+      }
     } catch (error) {
       console.error("Error analyzing code:", error);
     } finally {
@@ -83,7 +97,7 @@ const Home = () => {
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         {/* File Explorer */}
-        <FileExplorer />
+        <FileExplorer files={fileTree} />
 
         {/* Chat Interface */}
         <div className="flex-1">

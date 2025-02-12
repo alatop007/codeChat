@@ -1,12 +1,12 @@
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-export const analyzeCode = async (file: File) => {
-  const formData = new FormData();
-  formData.append("file", file);
-
+export const analyzeCode = async (path: string) => {
   const response = await fetch(`${API_URL}/analyze-code`, {
     method: "POST",
-    body: formData,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ path }),
   });
 
   if (!response.ok) {
