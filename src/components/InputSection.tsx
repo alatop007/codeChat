@@ -11,14 +11,12 @@ import {
 } from "./ui/tooltip";
 
 interface InputSectionProps {
-  onLocalPathSelect?: (path: string) => void;
-  onGitHubUrlSubmit?: (url: string) => void;
+  onAnalyze?: (input: { type: "path" | "url"; value: string }) => void;
   isProcessing?: boolean;
 }
 
 const InputSection = ({
-  onLocalPathSelect = () => {},
-  onGitHubUrlSubmit = () => {},
+  onAnalyze = () => {},
   isProcessing = false,
 }: InputSectionProps) => {
   const [githubUrl, setGithubUrl] = React.useState("");
@@ -40,7 +38,7 @@ const InputSection = ({
           if (entry && entry.isDirectory) {
             const dirPath = entry.fullPath;
             console.log("Dropped directory:", dirPath);
-            onLocalPathSelect(dirPath);
+            onAnalyze({ type: "path", value: dirPath });
             break;
           }
         }
@@ -51,16 +49,17 @@ const InputSection = ({
   const handleGitHubSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (githubUrl.trim()) {
-      onGitHubUrlSubmit(githubUrl);
+      onAnalyze({ type: "url", value: githubUrl.trim() });
+      setGithubUrl("");
     }
   };
 
   return (
     <div className="w-full p-6 space-y-6 bg-background border-b">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Local Directory Input */}
+        {/* Local Directory Input - Currently Disabled */}
         <Card
-          className="p-6 space-y-4"
+          className="p-6 space-y-4 opacity-50"
           onDragOver={handleDragOver}
           onDrop={handleDrop}
         >
@@ -81,7 +80,7 @@ const InputSection = ({
                     filePath.lastIndexOf("/"),
                   );
                   console.log("Selected directory:", dirPath);
-                  onLocalPathSelect(dirPath);
+                  onAnalyze({ type: "path", value: dirPath });
                 }
               }}
             />
@@ -91,11 +90,13 @@ const InputSection = ({
                   <Button
                     variant="outline"
                     className="w-full h-24 border-dashed"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isProcessing}
+                    onClick={() =>
+                      alert("Local directory analysis coming soon!")
+                    }
+                    disabled={true}
                   >
                     <Upload className="h-6 w-6 mr-2" />
-                    Drag & Drop or Click to Select
+                    Drag & Drop or Click to Select Directory
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -123,7 +124,7 @@ const InputSection = ({
               disabled={!githubUrl.trim() || isProcessing}
             >
               <Github className="h-4 w-4 mr-2" />
-              Analyze Repository
+              Analyze GitHub Repository
             </Button>
           </form>
         </Card>

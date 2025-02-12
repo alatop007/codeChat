@@ -33,10 +33,18 @@ const Home = () => {
 
   const [fileTree, setFileTree] = React.useState<any[]>([]);
 
-  const handleLocalPathSelect = async (path: string) => {
+  const handleAnalyze = async (input: {
+    type: "path" | "url";
+    value: string;
+  }) => {
+    // Only handle URL type for now since backend only supports GitHub URLs
+    if (input.type === "path") {
+      console.error("Local path analysis not supported yet");
+      return;
+    }
     try {
       setIsProcessing(true);
-      const result = await analyzeCode(path);
+      const result = await analyzeCode(input);
       setFileTree(result.file_tree);
       setCodeContext(result.code_content);
 
@@ -88,11 +96,7 @@ const Home = () => {
   return (
     <div className="h-screen w-full flex flex-col bg-background">
       {/* Input Section */}
-      <InputSection
-        onLocalPathSelect={handleLocalPathSelect}
-        onGitHubUrlSubmit={(url) => console.log("GitHub URL:", url)}
-        isProcessing={isProcessing}
-      />
+      <InputSection onAnalyze={handleAnalyze} isProcessing={isProcessing} />
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
