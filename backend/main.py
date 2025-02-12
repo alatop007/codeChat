@@ -4,9 +4,8 @@ from pydantic import BaseModel
 import os
 import shutil
 from pathlib import Path
-from typing import List, Dict
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+import requests
+import json
 
 app = FastAPI()
 
@@ -19,14 +18,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize model and tokenizer
-model_name = "deepseek-ai/deepseek-coder-6.7b-base"
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForCausalLM.from_pretrained(model_name)
+OLLAMA_API = "http://localhost:11434"
+MODEL_NAME = "codellama"
 
 class CodeQuery(BaseModel):
     query: str
     context: str
+
+def query_ollama(prompt: str) -> str:
+    try:
+        response = requests.post(
+            f"{OLLAMA_API}/api/generate",
+            json={
+                "model": MODEL_NAME,
+                "prompt": prompt,
+                "stream": False
+            }
+        )
+        response.raise_for_status()
+        return response.json()["response"]
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Error communicating with Ollama: {str(e)}")
 
 @app.post("/analyze-code")
 async def analyze_code(file: UploadFile = File(...)):
@@ -55,22 +67,42 @@ async def analyze_code(file: UploadFile = File(...)):
 async def query_code(query: CodeQuery):
     try:
         # Prepare input for the model
-        prompt = f"Code context:\n{query.context}\n\nQuestion: {query.query}\n\nAnswer:"
+        prompt = f"""Code context:
+{query.context}
+
+Question: {query.query}
+
+Please provide a clear and concise answer based on the code context above.
+
+Answer:"""
         
-        # Generate response
-        inputs = tokenizer(prompt, return_tensors="pt", max_length=2048, truncation=True)
-        outputs = model.generate(
-            inputs.input_ids,
-            max_length=512,
-            temperature=0.7,
-            num_return_sequences=1,
-        )
-        
-        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        # Get response from Ollama
+        response = query_ollama(prompt)
         
         return {"response": response}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/health")
+async def health_check():
+    try:
+        # Check if Ollama is running and model is available
+        response = requests.get(f"{OLLAMA_API}/api/tags")
+        response.raise_for_status()
+        models = response.json().get("models", [])
+        
+        if not any(model["name"] == MODEL_NAME for model in models):
+            return {
+                "status": "warning",
+                "message": f"Ollama is running but {MODEL_NAME} model is not pulled. Please run 'ollama pull {MODEL_NAME}'"
+            }
+            
+        return {"status": "healthy", "message": "Backend is running and Ollama is available"}
+    except requests.exceptions.RequestException:
+        return {
+            "status": "error",
+            "message": "Cannot connect to Ollama. Please make sure Ollama is running on port 11434"
+        }
 
 if __name__ == "__main__":
     import uvicorn
