@@ -19,7 +19,7 @@ app.add_middleware(
 )
 
 OLLAMA_API = "http://localhost:11434"
-MODEL_NAME = "codellama"
+MODEL_NAME = "deepseek-r1:1.5b"
 
 class CodeQuery(BaseModel):
     query: str
