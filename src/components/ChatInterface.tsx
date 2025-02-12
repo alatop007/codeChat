@@ -16,16 +16,8 @@ interface ChatInterfaceProps {
 }
 
 const ChatInterface = ({
-  messages = [
-    {
-      id: "1",
-      role: "assistant",
-      content:
-        "Hello! I'm ready to help you analyze your code. What would you like to know?",
-      timestamp: new Date().toISOString(),
-    },
-  ],
-  onSendMessage = () => {},
+  messages,
+  onSendMessage,
   isLoading = false,
 }: ChatInterfaceProps) => {
   return (

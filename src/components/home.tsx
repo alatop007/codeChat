@@ -88,6 +88,7 @@ const Home = () => {
         {/* Chat Interface */}
         <div className="flex-1">
           <ChatInterface
+            messages={messages}
             onSendMessage={handleSendMessage}
             isLoading={isProcessing}
           />
