@@ -41,7 +41,8 @@ def query_ollama(prompt: str) -> str:
             }
         )
         response.raise_for_status()
-        return response.json()["response"]
+        formatted_response = response.json()["response"].strip()
+        return formatted_response
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=f"Error communicating with Ollama: {str(e)}")
 
@@ -85,7 +86,7 @@ def analyze_directory(directory_path: Path) -> dict:
                             }
                             parent_list.append(node)
                             nonlocal code_content
-                            code_content += f"\n\nFile: {item.relative_to(directory_path)}\n{content}"
+                            code_content += f"\n\n{'='*80}\nFile: {item.relative_to(directory_path)}\n{'-'*80}\n{content}"
                     except Exception as e:
                         print(f"Error reading file {item}: {e}")
                 elif item.is_dir():
@@ -144,11 +145,26 @@ async def analyze_code(repo: RepoURL):
             
             # Get initial analysis from Ollama
             code_sample = analysis_result['code_content'][:3000]  # First 3000 chars for initial analysis
-            prompt = f"""Please analyze this codebase and provide a brief summary of its main components and functionality:
+            prompt = """You are an expert software engineer. Please analyze this codebase and provide a well-structured summary using the following format:
 
+## Overview
+[Brief description of the codebase]
+
+## Main Components
+1. [Component 1]
+   - Purpose
+   - Key features
+2. [Component 2]
+   - Purpose
+   - Key features
+
+## Key Functionality
+- [Key function 1]
+- [Key function 2]
+
+Code to analyze:
 {code_sample}
-
-Provide a concise summary of the codebase's main components and purpose."""
+"""
             
             initial_analysis = query_ollama(prompt)
             
@@ -167,15 +183,19 @@ Provide a concise summary of the codebase's main components and purpose."""
 @app.post("/query")
 async def query_code(query: CodeQuery):
     try:
-        # Prepare input for the model
+        # Update prompt to request structured output
         prompt = f"""Code context:
 {query.context}
 
 Question: {query.query}
 
-Please provide a clear and concise answer based on the code context above.
+You are an expert software engineer. Please provide a clear and structured answer using the following format:
 
-Answer:"""
+## Answer
+[Main response]
+
+## Code Examples (if applicable)
+"""
         
         # Get response from Ollama
         response = query_ollama(prompt)
