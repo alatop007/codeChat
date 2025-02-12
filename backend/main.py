@@ -1,11 +1,13 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import os
 import shutil
 from pathlib import Path
 import requests
 import json
+import tempfile
+import subprocess
 
 app = FastAPI()
 
@@ -25,8 +27,8 @@ class CodeQuery(BaseModel):
     query: str
     context: str
 
-class DirectoryPath(BaseModel):
-    path: str
+class RepoURL(BaseModel):
+    url: str = Field(..., description="GitHub repository URL")
 
 def query_ollama(prompt: str) -> str:
     try:
@@ -103,34 +105,64 @@ def analyze_directory(directory_path: Path) -> dict:
     return {"file_tree": file_tree, "code_content": code_content}
 
 @app.post("/analyze-code")
-async def analyze_code(directory: DirectoryPath):
-    print(f"Analyzing directory: {directory.path}")
+async def analyze_code(repo: RepoURL):
+    print(f"Analyzing repository: {repo.url}")
     try:
-        dir_path = Path(directory.path)
-        if not dir_path.exists():
-            raise HTTPException(status_code=400, detail="Directory not found")
-        
-        # Analyze the directory
-        analysis_result = analyze_directory(dir_path)
-        
-        # Get initial analysis from Ollama
-        code_sample = analysis_result['code_content'][:3000]  # First 3000 chars for initial analysis
-        prompt = f"""Please analyze this codebase and provide a brief summary of its main components and functionality:
+        # Create a temporary directory
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Clone the repository
+            try:
+                subprocess.run(
+                    ["git", "clone", repo.url, temp_dir], 
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+            except subprocess.CalledProcessError as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Failed to clone repository: {e.stderr}"
+                )
+            
+            # Analyze the directory
+            try:
+                analysis_result = analyze_directory(Path(temp_dir))
+            except Exception as e:
+                print(f"Error during directory analysis: {str(e)}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to analyze directory: {str(e)}"
+                )
+            
+            if not analysis_result["file_tree"]:
+                return {
+                    "file_tree": [],
+                    "code_content": "",
+                    "summary": "No code files found in the directory",
+                    "message": "Directory analyzed but no valid code files were found"
+                }
+            
+            # Get initial analysis from Ollama
+            code_sample = analysis_result['code_content'][:3000]  # First 3000 chars for initial analysis
+            prompt = f"""Please analyze this codebase and provide a brief summary of its main components and functionality:
 
 {code_sample}
 
 Provide a concise summary of the codebase's main components and purpose."""
-        
-        initial_analysis = query_ollama(prompt)
-        
-        return {
-            "file_tree": analysis_result["file_tree"],
-            "code_content": analysis_result["code_content"],
-            "summary": initial_analysis,
-            "message": "Code analyzed successfully"
-        }
+            
+            initial_analysis = query_ollama(prompt)
+            
+            return {
+                "file_tree": analysis_result["file_tree"],
+                "code_content": analysis_result["code_content"],
+                "summary": initial_analysis,
+                "message": "Code analyzed successfully"
+            }
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Unexpected error in analyze_code: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 @app.post("/query")
 async def query_code(query: CodeQuery):
