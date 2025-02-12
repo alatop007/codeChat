@@ -53,6 +53,7 @@ def is_code_file(file_path: Path) -> bool:
     return file_path.suffix.lower() in code_extensions
 
 def analyze_directory(directory_path: Path) -> dict:
+    print(f"Starting analysis of directory: {directory_path}")
     file_tree = []
     code_content = ""
     
@@ -103,6 +104,7 @@ def analyze_directory(directory_path: Path) -> dict:
 
 @app.post("/analyze-code")
 async def analyze_code(directory: DirectoryPath):
+    print(f"Analyzing directory: {directory.path}")
     try:
         dir_path = Path(directory.path)
         if not dir_path.exists():
