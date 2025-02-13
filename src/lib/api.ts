@@ -8,13 +8,12 @@ interface AnalyzeInput {
 export const analyzeCode = async (input: AnalyzeInput) => {
   console.log(`Analyzing ${input.type}:`, input.value);
 
-  // Backend expects { url: string } format
   const response = await fetch(`${API_URL}/analyze-code`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ url: input.value }),
+    body: JSON.stringify(input),
   });
 
   if (!response.ok) {

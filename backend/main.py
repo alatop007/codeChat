@@ -27,8 +27,9 @@ class CodeQuery(BaseModel):
     query: str
     context: str
 
-class RepoURL(BaseModel):
-    url: str = Field(..., description="GitHub repository URL")
+class AnalyzeInput(BaseModel):
+    type: str = Field(..., description="Type of input: 'url' or 'path'")
+    value: str = Field(..., description="GitHub URL or local directory path")
 
 def query_ollama(prompt: str) -> str:
     try:
@@ -41,8 +42,7 @@ def query_ollama(prompt: str) -> str:
             }
         )
         response.raise_for_status()
-        formatted_response = response.json()["response"].strip()
-        return formatted_response
+        return response.json()["response"]
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=f"Error communicating with Ollama: {str(e)}")
 
@@ -86,7 +86,7 @@ def analyze_directory(directory_path: Path) -> dict:
                             }
                             parent_list.append(node)
                             nonlocal code_content
-                            code_content += f"\n\n{'='*80}\nFile: {item.relative_to(directory_path)}\n{'-'*80}\n{content}"
+                            code_content += f"\n\nFile: {item.relative_to(directory_path)}\n{content}"
                     except Exception as e:
                         print(f"Error reading file {item}: {e}")
                 elif item.is_dir():
@@ -106,7 +106,44 @@ def analyze_directory(directory_path: Path) -> dict:
     return {"file_tree": file_tree, "code_content": code_content}
 
 @app.post("/analyze-code")
-async def analyze_code(repo: RepoURL):
+async def analyze_code(input: AnalyzeInput):
+    print(f"Analyzing {input.type}: {input.value}")
+    
+    try:
+        if input.type == "url":
+            # Create a temporary directory for git clone
+            with tempfile.TemporaryDirectory() as temp_dir:
+                try:
+                    subprocess.run(
+                        ["git", "clone", input.value, temp_dir],
+                        check=True,
+                        capture_output=True,
+                        text=True
+                    )
+                except subprocess.CalledProcessError as e:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Failed to clone repository: {e.stderr}"
+                    )
+                
+                directory_path = Path(temp_dir)
+        else:  # input.type == "path"
+            directory_path = Path(input.value)
+            if not directory_path.exists():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Directory not found: {input.value}"
+                )
+        
+        # Analyze the directory
+        try:
+            analysis_result = analyze_directory(directory_path)
+        except Exception as e:
+            print(f"Error during directory analysis: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to analyze directory: {str(e)}"
+            )
     print(f"Analyzing repository: {repo.url}")
     try:
         # Create a temporary directory
@@ -145,26 +182,11 @@ async def analyze_code(repo: RepoURL):
             
             # Get initial analysis from Ollama
             code_sample = analysis_result['code_content'][:3000]  # First 3000 chars for initial analysis
-            prompt = """You are an expert software engineer. Please analyze this codebase and provide a well-structured summary using the following format:
+            prompt = f"""Please analyze this codebase and provide a brief summary of its main components and functionality:
 
-## Overview
-[Brief description of the codebase]
-
-## Main Components
-1. [Component 1]
-   - Purpose
-   - Key features
-2. [Component 2]
-   - Purpose
-   - Key features
-
-## Key Functionality
-- [Key function 1]
-- [Key function 2]
-
-Code to analyze:
 {code_sample}
-"""
+
+Provide a concise summary of the codebase's main components and purpose."""
             
             initial_analysis = query_ollama(prompt)
             
@@ -183,19 +205,15 @@ Code to analyze:
 @app.post("/query")
 async def query_code(query: CodeQuery):
     try:
-        # Update prompt to request structured output
+        # Prepare input for the model
         prompt = f"""Code context:
 {query.context}
 
 Question: {query.query}
 
-You are an expert software engineer. Please provide a clear and structured answer using the following format:
+Please provide a clear and concise answer based on the code context above.
 
-## Answer
-[Main response]
-
-## Code Examples (if applicable)
-"""
+Answer:"""
         
         # Get response from Ollama
         response = query_ollama(prompt)
@@ -224,72 +242,6 @@ async def health_check():
             "status": "error",
             "message": "Cannot connect to Ollama. Please make sure Ollama is running on port 11434"
         }
-
-@app.post("/analyze-local")
-async def analyze_local_directory(directory: dict):
-    print(f"Analyzing local directory: {directory['path']}")
-    try:
-        dir_path = Path(directory['path'])
-        if not dir_path.exists():
-            raise HTTPException(
-                status_code=400,
-                detail=f"Directory not found: {dir_path}"
-            )
-            
-        # Analyze the directory
-        try:
-            analysis_result = analyze_directory(dir_path)
-        except Exception as e:
-            print(f"Error during directory analysis: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to analyze directory: {str(e)}"
-            )
-        
-        if not analysis_result["file_tree"]:
-            return {
-                "file_tree": [],
-                "code_content": "",
-                "summary": "No code files found in the directory",
-                "message": "Directory analyzed but no valid code files were found"
-            }
-        
-        # Get initial analysis from Ollama
-        code_sample = analysis_result['code_content'][:3000]
-        prompt = """You are an expert software engineer. Please analyze this codebase and provide a well-structured summary using the following format:
-
-## Overview
-[Brief description of the codebase]
-
-## Main Components
-1. [Component 1]
-   - Purpose
-   - Key features
-2. [Component 2]
-   - Purpose
-   - Key features
-
-## Key Functionality
-- [Key function 1]
-- [Key function 2]
-
-Code to analyze:
-{code_sample}
-"""
-        
-        initial_analysis = query_ollama(prompt)
-        
-        return {
-            "file_tree": analysis_result["file_tree"],
-            "code_content": analysis_result["code_content"],
-            "summary": initial_analysis,
-            "message": "Code analyzed successfully"
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Unexpected error in analyze_local_directory: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

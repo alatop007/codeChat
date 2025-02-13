@@ -32,7 +32,7 @@ const InputSection = ({
     e.preventDefault();
     e.stopPropagation();
     const items = e.dataTransfer.items;
-    
+
     if (items) {
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
@@ -43,9 +43,12 @@ const InputSection = ({
             const dirPath = dirHandle.name;
             console.log("Selected directory:", dirPath);
             setLocalDirPath(dirPath);
+            onAnalyze({ type: "path", value: dirPath });
           } catch (err) {
             console.error("Error accessing directory:", err);
-            alert("Unable to access directory. Please make sure you've granted permission.");
+            alert(
+              "Unable to access directory. Please make sure you've granted permission.",
+            );
           }
           break;
         }
@@ -65,10 +68,9 @@ const InputSection = ({
     e.preventDefault();
     if (localDirPath.trim()) {
       try {
-        // Just analyze the already selected directory path
-        onAnalyze({ 
-          type: "path", 
-          value: localDirPath 
+        onAnalyze({
+          type: "path",
+          value: localDirPath.trim(),
         });
       } catch (err) {
         console.error("Error analyzing directory:", err);
@@ -79,15 +81,18 @@ const InputSection = ({
 
   const handleDirectorySelect = async () => {
     try {
-      const dirHandle = await (window as any).showDirectoryPicker({
-        startIn: 'desktop',
+      // @ts-ignore - showDirectoryPicker is not yet in TypeScript types
+      const dirHandle = await window.showDirectoryPicker({
+        startIn: "desktop",
       });
       const dirPath = dirHandle.name;
       console.log("Selected directory:", dirPath);
       setLocalDirPath(dirPath);
     } catch (err) {
       console.error("Error accessing directory:", err);
-      alert("Unable to access directory. Please make sure you've granted permission.");
+      alert(
+        "Unable to access directory. Please make sure you've granted permission.",
+      );
     }
   };
 
@@ -102,23 +107,13 @@ const InputSection = ({
         >
           <h3 className="text-lg font-semibold">Local Directory</h3>
           <form onSubmit={handleLocalDirSubmit} className="space-y-4">
-            <div className="flex items-center gap-4">
-              <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                {...{ directory: "", webkitdirectory: "", mozdirectory: "" } as any}
-                onChange={handleDirectorySelect}
-              />
-              <Input
-                type="text"
-                placeholder="Select a directory to analyze"
-                value={localDirPath}
-                onChange={(e) => setLocalDirPath(e.target.value)}
-                disabled={isProcessing}
-              />
-            </div>
-            
+            <Input
+              type="text"
+              placeholder="Enter directory path or select below"
+              value={localDirPath}
+              onChange={(e) => setLocalDirPath(e.target.value)}
+              disabled={isProcessing}
+            />
             <div className="grid grid-cols-2 gap-4">
               <TooltipProvider>
                 <Tooltip>
@@ -169,7 +164,7 @@ const InputSection = ({
               disabled={!githubUrl.trim() || isProcessing}
             >
               <Github className="h-4 w-4 mr-2" />
-              Analyze GitHub Repository
+              Analyze Repository
             </Button>
           </form>
         </Card>

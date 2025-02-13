@@ -37,13 +37,8 @@ const Home = () => {
     type: "path" | "url";
     value: string;
   }) => {
-    // Only handle URL type for now since backend only supports GitHub URLs
-    if (input.type === "path") {
-      console.error("Local path analysis not supported yet");
-      return;
-    }
+    setIsProcessing(true);
     try {
-      setIsProcessing(true);
       const result = await analyzeCode(input);
       setFileTree(result.file_tree);
       setCodeContext(result.code_content);
