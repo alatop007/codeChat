@@ -63,7 +63,39 @@ const MessageList = ({
                     {new Date(message.timestamp).toLocaleTimeString()}
                   </span>
                 </div>
-                <div className="text-sm">{message.content}</div>
+                <div className="text-sm prose dark:prose-invert max-w-none">
+                  {message.content.split("\n").map((paragraph, i) => {
+                    // Handle bullet points
+                    if (paragraph.trim().startsWith("- ")) {
+                      return <li key={i}>{paragraph.trim().substring(2)}</li>;
+                    }
+                    // Handle code blocks
+                    if (paragraph.trim().startsWith("```")) {
+                      const code = paragraph
+                        .replace(/```\w*\n?/, "")
+                        .replace(/```$/, "");
+                      return (
+                        <pre key={i} className="bg-muted p-4 rounded-lg">
+                          <code>{code}</code>
+                        </pre>
+                      );
+                    }
+                    // Handle headers
+                    if (paragraph.trim().startsWith("#")) {
+                      const level = paragraph.match(/^#+/)[0].length;
+                      const text = paragraph.replace(/^#+\s/, "");
+                      const HeaderTag =
+                        `h${level}` as keyof JSX.IntrinsicElements;
+                      return (
+                        <HeaderTag key={i} className="font-bold mt-4">
+                          {text}
+                        </HeaderTag>
+                      );
+                    }
+                    // Regular paragraphs
+                    return paragraph.trim() ? <p key={i}>{paragraph}</p> : null;
+                  })}
+                </div>
               </div>
             </Card>
           ))}

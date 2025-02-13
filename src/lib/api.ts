@@ -20,7 +20,17 @@ export const analyzeCode = async (input: AnalyzeInput) => {
     throw new Error("Failed to analyze code");
   }
 
-  return response.json();
+  const data = await response.json();
+
+  // Format the response if it contains AI analysis
+  if (data.summary) {
+    data.summary = data.summary
+      .replace(/<think>.*?<\/think>/gs, "") // Remove thinking process
+      .replace(/\n{3,}/g, "\n\n") // Normalize multiple line breaks to max 2
+      .trim();
+  }
+
+  return data;
 };
 
 export const queryCode = async (query: string, context: string) => {
@@ -36,5 +46,15 @@ export const queryCode = async (query: string, context: string) => {
     throw new Error("Failed to query code");
   }
 
-  return response.json();
+  const data = await response.json();
+
+  // Format the response if it contains AI analysis
+  if (data.response) {
+    data.response = data.response
+      .replace(/<think>.*?<\/think>/gs, "") // Remove thinking process
+      .replace(/\n{3,}/g, "\n\n") // Normalize multiple line breaks to max 2
+      .trim();
+  }
+
+  return data;
 };
