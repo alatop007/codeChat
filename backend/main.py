@@ -225,6 +225,72 @@ async def health_check():
             "message": "Cannot connect to Ollama. Please make sure Ollama is running on port 11434"
         }
 
+@app.post("/analyze-local")
+async def analyze_local_directory(directory: dict):
+    print(f"Analyzing local directory: {directory['path']}")
+    try:
+        dir_path = Path(directory['path'])
+        if not dir_path.exists():
+            raise HTTPException(
+                status_code=400,
+                detail=f"Directory not found: {dir_path}"
+            )
+            
+        # Analyze the directory
+        try:
+            analysis_result = analyze_directory(dir_path)
+        except Exception as e:
+            print(f"Error during directory analysis: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to analyze directory: {str(e)}"
+            )
+        
+        if not analysis_result["file_tree"]:
+            return {
+                "file_tree": [],
+                "code_content": "",
+                "summary": "No code files found in the directory",
+                "message": "Directory analyzed but no valid code files were found"
+            }
+        
+        # Get initial analysis from Ollama
+        code_sample = analysis_result['code_content'][:3000]
+        prompt = """You are an expert software engineer. Please analyze this codebase and provide a well-structured summary using the following format:
+
+## Overview
+[Brief description of the codebase]
+
+## Main Components
+1. [Component 1]
+   - Purpose
+   - Key features
+2. [Component 2]
+   - Purpose
+   - Key features
+
+## Key Functionality
+- [Key function 1]
+- [Key function 2]
+
+Code to analyze:
+{code_sample}
+"""
+        
+        initial_analysis = query_ollama(prompt)
+        
+        return {
+            "file_tree": analysis_result["file_tree"],
+            "code_content": analysis_result["code_content"],
+            "summary": initial_analysis,
+            "message": "Code analyzed successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Unexpected error in analyze_local_directory: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

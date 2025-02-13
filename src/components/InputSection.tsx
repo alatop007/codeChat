@@ -20,6 +20,7 @@ const InputSection = ({
   isProcessing = false,
 }: InputSectionProps) => {
   const [githubUrl, setGithubUrl] = React.useState("");
+  const [localDirPath, setLocalDirPath] = React.useState("");
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -27,20 +28,26 @@ const InputSection = ({
     e.stopPropagation();
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const items = e.dataTransfer.items;
+    
     if (items) {
       for (let i = 0; i < items.length; i++) {
-        if (items[i].kind === "file") {
-          const entry = items[i].webkitGetAsEntry();
-          if (entry && entry.isDirectory) {
-            const dirPath = entry.fullPath;
-            console.log("Dropped directory:", dirPath);
-            onAnalyze({ type: "path", value: dirPath });
-            break;
+        const item = items[i];
+        if (item.kind === "file") {
+          try {
+            // @ts-ignore - showDirectoryPicker is not yet in TypeScript types
+            const dirHandle = await window.showDirectoryPicker();
+            const dirPath = dirHandle.name;
+            console.log("Selected directory:", dirPath);
+            setLocalDirPath(dirPath);
+          } catch (err) {
+            console.error("Error accessing directory:", err);
+            alert("Unable to access directory. Please make sure you've granted permission.");
           }
+          break;
         }
       }
     }
@@ -54,57 +61,95 @@ const InputSection = ({
     }
   };
 
+  const handleLocalDirSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (localDirPath.trim()) {
+      try {
+        // Just analyze the already selected directory path
+        onAnalyze({ 
+          type: "path", 
+          value: localDirPath 
+        });
+      } catch (err) {
+        console.error("Error analyzing directory:", err);
+        alert("Error analyzing directory. Please try again.");
+      }
+    }
+  };
+
+  const handleDirectorySelect = async () => {
+    try {
+      const dirHandle = await (window as any).showDirectoryPicker({
+        startIn: 'desktop',
+      });
+      const dirPath = dirHandle.name;
+      console.log("Selected directory:", dirPath);
+      setLocalDirPath(dirPath);
+    } catch (err) {
+      console.error("Error accessing directory:", err);
+      alert("Unable to access directory. Please make sure you've granted permission.");
+    }
+  };
+
   return (
     <div className="w-full p-6 space-y-6 bg-background border-b">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Local Directory Input - Currently Disabled */}
+        {/* Local Directory Input */}
         <Card
-          className="p-6 space-y-4 opacity-50"
+          className="p-6 space-y-4"
           onDragOver={handleDragOver}
           onDrop={handleDrop}
         >
           <h3 className="text-lg font-semibold">Local Directory</h3>
-          <div className="flex items-center gap-4">
-            <Input
-              type="file"
-              ref={fileInputRef}
-              className="hidden"
-              webkitdirectory="true"
-              onChange={(e) => {
-                const files = e.target.files;
-                if (files && files.length > 0) {
-                  // Get the directory path from the first file
-                  const filePath = files[0].path;
-                  const dirPath = filePath.substring(
-                    0,
-                    filePath.lastIndexOf("/"),
-                  );
-                  console.log("Selected directory:", dirPath);
-                  onAnalyze({ type: "path", value: dirPath });
-                }
-              }}
-            />
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="w-full h-24 border-dashed"
-                    onClick={() =>
-                      alert("Local directory analysis coming soon!")
-                    }
-                    disabled={true}
-                  >
-                    <Upload className="h-6 w-6 mr-2" />
-                    Drag & Drop or Click to Select Directory
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Select a local directory to analyze</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
+          <form onSubmit={handleLocalDirSubmit} className="space-y-4">
+            <div className="flex items-center gap-4">
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                {...{ directory: "", webkitdirectory: "", mozdirectory: "" } as any}
+                onChange={handleDirectorySelect}
+              />
+              <Input
+                type="text"
+                placeholder="Select a directory to analyze"
+                value={localDirPath}
+                onChange={(e) => setLocalDirPath(e.target.value)}
+                disabled={isProcessing}
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full h-12 border-dashed"
+                      onClick={handleDirectorySelect}
+                      disabled={isProcessing}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Select Directory
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Select a local directory to analyze</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={!localDirPath.trim() || isProcessing}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Analyze Directory
+              </Button>
+            </div>
+          </form>
         </Card>
 
         {/* GitHub URL Input */}
