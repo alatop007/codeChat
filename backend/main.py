@@ -127,6 +127,7 @@ async def analyze_code(input: AnalyzeInput):
                     )
                 
                 directory_path = Path(temp_dir)
+                print(f"Analyzing repository: {input.value}")
         else:  # input.type == "path"
             directory_path = Path(input.value)
             if not directory_path.exists():
@@ -134,6 +135,7 @@ async def analyze_code(input: AnalyzeInput):
                     status_code=400,
                     detail=f"Directory not found: {input.value}"
                 )
+            print(f"Analyzing local directory: {input.value}")
         
         # Analyze the directory
         try:
@@ -144,58 +146,31 @@ async def analyze_code(input: AnalyzeInput):
                 status_code=500,
                 detail=f"Failed to analyze directory: {str(e)}"
             )
-    print(f"Analyzing repository: {repo.url}")
-    try:
-        # Create a temporary directory
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Clone the repository
-            try:
-                subprocess.run(
-                    ["git", "clone", repo.url, temp_dir], 
-                    check=True,
-                    capture_output=True,
-                    text=True
-                )
-            except subprocess.CalledProcessError as e:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Failed to clone repository: {e.stderr}"
-                )
-            
-            # Analyze the directory
-            try:
-                analysis_result = analyze_directory(Path(temp_dir))
-            except Exception as e:
-                print(f"Error during directory analysis: {str(e)}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Failed to analyze directory: {str(e)}"
-                )
-            
-            if not analysis_result["file_tree"]:
-                return {
-                    "file_tree": [],
-                    "code_content": "",
-                    "summary": "No code files found in the directory",
-                    "message": "Directory analyzed but no valid code files were found"
-                }
-            
-            # Get initial analysis from Ollama
-            code_sample = analysis_result['code_content'][:3000]  # First 3000 chars for initial analysis
-            prompt = f"""Please analyze this codebase and provide a brief summary of its main components and functionality:
+        
+        if not analysis_result["file_tree"]:
+            return {
+                "file_tree": [],
+                "code_content": "",
+                "summary": "No code files found in the directory",
+                "message": "Directory analyzed but no valid code files were found"
+            }
+        
+        # Get initial analysis from Ollama
+        code_sample = analysis_result['code_content'][:3000]  # First 3000 chars for initial analysis
+        prompt = f"""Please analyze this codebase and provide a brief summary of its main components and functionality:
 
 {code_sample}
 
 Provide a concise summary of the codebase's main components and purpose."""
-            
-            initial_analysis = query_ollama(prompt)
-            
-            return {
-                "file_tree": analysis_result["file_tree"],
-                "code_content": analysis_result["code_content"],
-                "summary": initial_analysis,
-                "message": "Code analyzed successfully"
-            }
+        
+        initial_analysis = query_ollama(prompt)
+        
+        return {
+            "file_tree": analysis_result["file_tree"],
+            "code_content": analysis_result["code_content"],
+            "summary": initial_analysis,
+            "message": "Code analyzed successfully"
+        }
     except HTTPException:
         raise
     except Exception as e:
